@@ -15,7 +15,7 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
     {
       id: 'init-1',
       role: 'model',
-      text: 'I am your Senior Insurance Advocate. My job is to fight for your claim. Upload your rejection letter or policy document, and I will tell you exactly what legal or procedural remedy is available to you. Let\'s proceed.'
+      text: "I am your Senior Insurance Advocate. I analyze your claim rejections against IRDAI regulations and your policy terms.\n\nUpload your rejection letter or describe the issue. I will tell you if the rejection is valid and draft your appeal letter immediately."
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -156,6 +156,125 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
     }
   };
 
+  // === DOWNLOAD DRAFT HELPER ===
+  const downloadDraftAsDoc = (content: string) => {
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset="utf-8">
+        <title>Draft Letter</title>
+      </head>
+      <body>
+        ${content.replace(/\n/g, '<br>')}
+      </body>
+      </html>
+    `;
+    
+    const blob = new Blob(['\ufeff', htmlContent], {
+      type: 'application/msword'
+    });
+    
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Draft_Letter_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // === CUSTOM FORMATTER FOR RICH TEXT ===
+  const formatMessage = (text: string) => {
+    // 1. Separate "Draft Letter" code blocks (```text ... ``` or just ``` ... ```)
+    const codeBlockRegex = /```(?:text)?([\s\S]*?)```/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      // Push text before code block
+      if (match.index > lastIndex) {
+        parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+      }
+      // Push code block
+      parts.push({ type: 'code', content: match[1].trim() });
+      lastIndex = match.index + match[0].length;
+    }
+    // Push remaining text
+    if (lastIndex < text.length) {
+      parts.push({ type: 'text', content: text.slice(lastIndex) });
+    }
+
+    // Render Logic
+    return parts.map((part, idx) => {
+      if (part.type === 'code') {
+        return (
+          <div key={idx} className="my-4 rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-gray-50">
+            <div className="bg-gray-100 px-4 py-2 flex justify-between items-center border-b border-gray-200 gap-2">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Draft Letter / Email</span>
+              <div className="flex gap-2">
+                  <button 
+                    onClick={() => downloadDraftAsDoc(part.content)}
+                    className="text-xs bg-white hover:bg-gray-200 text-blue-600 font-semibold px-3 py-1 rounded border border-gray-300 transition-colors flex items-center gap-1"
+                    title="Download as Word Doc"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Doc
+                  </button>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(part.content)}
+                    className="text-xs bg-white hover:bg-gray-200 text-indigo-600 font-semibold px-3 py-1 rounded border border-gray-300 transition-colors flex items-center gap-1"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    Copy
+                  </button>
+              </div>
+            </div>
+            <pre className="p-4 text-sm text-gray-800 font-mono whitespace-pre-wrap overflow-x-auto">
+              {part.content}
+            </pre>
+          </div>
+        );
+      } else {
+        // Process Markdown-like syntax in text
+        // Headers (###), Bold (**), Bullets (*)
+        return (
+          <div key={idx} className="whitespace-pre-wrap leading-relaxed text-sm md:text-base text-gray-800">
+            {part.content.split('\n').map((line, lineIdx) => {
+               // Headers (### Text)
+               if (line.startsWith('###')) {
+                 return <h4 key={lineIdx} className="text-indigo-800 font-bold mt-4 mb-2 text-base md:text-lg">{line.replace(/^###\s*/, '')}</h4>;
+               }
+               // Bullets (* Text or - Text)
+               if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
+                   // Bold bolding inside bullets
+                   const content = line.trim().substring(2);
+                   const boldedContent = content.split(/(\*\*.*?\*\*)/).map((seg, segIdx) => 
+                      seg.startsWith('**') && seg.endsWith('**') 
+                      ? <strong key={segIdx} className="text-gray-900">{seg.slice(2, -2)}</strong> 
+                      : seg
+                   );
+                   return (
+                     <div key={lineIdx} className="flex items-start gap-2 mb-1.5 ml-1">
+                        <span className="text-indigo-500 mt-1.5">•</span>
+                        <span>{boldedContent}</span>
+                     </div>
+                   );
+               }
+               // Regular Text with Bold support
+               const boldedLine = line.split(/(\*\*.*?\*\*)/).map((seg, segIdx) => 
+                  seg.startsWith('**') && seg.endsWith('**') 
+                  ? <strong key={segIdx} className="text-gray-900">{seg.slice(2, -2)}</strong> 
+                  : seg
+               );
+               return <div key={lineIdx} className="min-h-[1.2em]">{boldedLine}</div>;
+            })}
+          </div>
+        );
+      }
+    });
+  };
+
   return (
     <section id="chatbot" className="py-16 md:py-24 bg-indigo-50 overflow-hidden relative">
         <div className="container mx-auto px-6">
@@ -230,14 +349,14 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
                     <div className="flex-grow overflow-y-auto p-4 md:p-6 bg-gray-50/50 space-y-6">
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] md:max-w-[70%] space-y-1`}>
+                                <div className={`${msg.role === 'user' ? 'max-w-[85%] md:max-w-[70%]' : 'w-full md:max-w-[85%]'} space-y-1`}>
                                     <div className={`
-                                      p-4 text-sm md:text-base shadow-sm
+                                      p-5 shadow-sm
                                       ${msg.role === 'user' 
-                                        ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-none' 
-                                        : 'bg-white border border-gray-200 text-gray-800 rounded-2xl rounded-tl-none'}
+                                        ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-none text-base' 
+                                        : 'bg-white border border-gray-200 rounded-2xl rounded-tl-none'}
                                     `}>
-                                        {msg.text}
+                                        {msg.role === 'user' ? msg.text : formatMessage(msg.text)}
                                     </div>
                                     {msg.attachmentNames && msg.attachmentNames.length > 0 && (
                                         <div className={`flex flex-wrap gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
