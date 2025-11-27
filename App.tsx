@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import Hero from './components/Hero';
-import ProblemSection from './components/ProblemSection';
-import FeaturesSection from './components/FeaturesSection';
-import ChatbotSection from './components/ChatbotSection';
-import RoadmapSection from './components/RoadmapSection';
-import ComparisonSection from './components/ComparisonSection';
-import ContactSection from './components/ContactSection';
+import LandingPage from './components/LandingPage';
+import Dashboard from './components/Dashboard';
 import Footer from './components/Footer';
+
+// Modals
+import ChatbotSection from './components/ChatbotSection';
 import PolicyAssistantModal from './components/PolicyAssistantModal';
 import HealthLocker from './components/HealthLocker';
 import PolicyComparisonModal from './components/PolicyComparisonModal';
 import ClaimAssessmentModal from './components/ClaimAssessmentModal';
+
 import { User, DriveFile } from './types';
 
 function App() {
@@ -24,7 +23,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [lockerFiles, setLockerFiles] = useState<DriveFile[]>([]);
 
-  // Initial load of files if user is present (Mock fetch)
+  // Initial load of files if user is present
   useEffect(() => {
     if (user) {
         fetch('/api/documents?email=' + user.email)
@@ -33,6 +32,8 @@ function App() {
                 if(data.files) setLockerFiles(data.files);
             })
             .catch(err => console.log("Failed to load docs", err));
+    } else {
+        setLockerFiles([]);
     }
   }, [user]);
 
@@ -74,27 +75,41 @@ function App() {
         user={user}
         setUser={setUser}
       />
-      <main>
-        <Hero />
-        <ProblemSection />
-        <FeaturesSection />
-        <ChatbotSection 
-            isModalOpen={isChatModalOpen} 
-            setIsModalOpen={setIsChatModalOpen} 
-            user={user}
-            lockerFiles={lockerFiles}
-        />
-        <RoadmapSection />
-        <ComparisonSection />
-        <ContactSection />
-      </main>
-      <Footer />
       
-      {/* Modals */}
+      <main>
+          {user ? (
+            <Dashboard 
+                user={user}
+                files={lockerFiles}
+                onOpenChat={() => setIsChatModalOpen(true)}
+                onOpenLocker={() => setIsLockerOpen(true)}
+                onOpenCompare={() => setIsCompareOpen(true)}
+                onOpenAssess={() => setIsAssessOpen(true)}
+                onOpenPolicy={() => setIsPolicyModalOpen(true)}
+            />
+          ) : (
+            <LandingPage />
+          )}
+      </main>
+
+      {/* Only show Footer on Landing Page to maximize workspace on Dashboard */}
+      {!user && <Footer />}
+      
+      {/* Modals - Only Rendered/Functional when User is logged in (conceptually), 
+          but kept here for state management. The UI hides buttons to open them if !user anyway. */}
+      
+      <ChatbotSection 
+          isModalOpen={isChatModalOpen} 
+          setIsModalOpen={setIsChatModalOpen} 
+          user={user}
+          lockerFiles={lockerFiles}
+      />
+      
       <PolicyAssistantModal 
         isOpen={isPolicyModalOpen} 
         onClose={() => setIsPolicyModalOpen(false)} 
       />
+      
       <HealthLocker 
         isOpen={isLockerOpen}
         onClose={() => setIsLockerOpen(false)}
@@ -102,11 +117,13 @@ function App() {
         files={lockerFiles}
         onUpload={handleUpload}
       />
+      
       <PolicyComparisonModal 
         isOpen={isCompareOpen}
         onClose={() => setIsCompareOpen(false)}
         files={lockerFiles}
       />
+      
       <ClaimAssessmentModal
         isOpen={isAssessOpen}
         onClose={() => setIsAssessOpen(false)}
