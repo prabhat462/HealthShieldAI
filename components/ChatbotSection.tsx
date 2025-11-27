@@ -15,7 +15,7 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
     {
       id: 'init-1',
       role: 'model',
-      text: 'Hello! I am ClaimAdvocate AI. I can analyze your policy documents or rejection letters to help you with your claim. Please upload a document or ask me a question to get started.'
+      text: 'I am your Senior Insurance Advocate. My job is to fight for your claim. Upload your rejection letter or policy document, and I will tell you exactly what legal or procedural remedy is available to you. Let\'s proceed.'
     }
   ]);
   const [inputValue, setInputValue] = useState('');
