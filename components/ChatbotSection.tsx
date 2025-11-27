@@ -116,8 +116,8 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
       const botMsgId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, { id: botMsgId, role: 'model', text: '' }]);
 
-      // NOTE: We now pass lockerFileIds to the service. The Worker will fetch their content from "Drive".
-      const reader = await streamChatResponse(messages, userMsg.text, attachmentParts, currentLockerIds);
+      // Pass lockerFileIds AND user email to the service.
+      const reader = await streamChatResponse(messages, userMsg.text, attachmentParts, currentLockerIds, user?.email);
       
       const decoder = new TextDecoder();
       let fullText = '';

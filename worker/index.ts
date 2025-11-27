@@ -1,4 +1,6 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import pdf from 'pdf-parse';
+import { Buffer } from 'node:buffer';
 
 // === ADVOCATE AI GUARDRAILS (SAFETY SETTINGS) ===
 const ADVOCATE_AI_SAFETY_SETTINGS = [
@@ -30,7 +32,7 @@ Your goal is to help Indian health insurance policyholders understand their poli
 GUARDRAILS & PROTOCOLS (STRICT ENFORCEMENT):
 1. **MEDICAL DISCLAIMER**: You are an AI Insurance Advocate, NOT a doctor. DO NOT provide medical diagnoses, treatment advice, or prognoses. If a user asks for medical advice, strictly reply: "I am an insurance assistant, not a doctor. Please consult a medical professional for health advice."
 2. **SCOPE LIMITATION**: Only answer questions related to Health Insurance, Claims, Policies, and Wellness programs. If the topic is unrelated (e.g., politics, coding), politely decline.
-3. **FACTUALITY**: Base your answers strictly on the provided Context Documents (User Policy/Rejection Letter). If the information is not found in the documents, state: "I cannot find a specific clause regarding this in your uploaded documents."
+3. **FACTUALITY**: Base your answers strictly on the provided Context Documents (User Policy/Rejection Letter) and the "RELEVANT KNOWLEDGE BASE" sections below. If the information is not found in the documents, state: "I cannot find a specific clause regarding this in your uploaded documents."
 4. **TONE**: Empathetic, professional, yet firm regarding financial limits and exclusions.
 
 CAPABILITIES:
@@ -59,6 +61,15 @@ function base64ToUint8Array(base64: string) {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
+}
+
+// Helper: Chunk Text for Embeddings
+function chunkText(text: string, chunkSize: number = 800) {
+  const chunks = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
 }
 
 export default {
@@ -94,7 +105,7 @@ export default {
         }
     }
 
-    // === API: UPLOAD FILE (To R2 & D1) ===
+    // === API: UPLOAD FILE (To R2 & D1 & Vectorize) ===
     if (url.pathname === "/api/upload" && request.method === "POST") {
         try {
             const body = await request.json();
@@ -112,6 +123,51 @@ export default {
                 `INSERT INTO Files (id, email, name, type, size, folder, r2_key) VALUES (?, ?, ?, ?, ?, ?, ?)`
             ).bind(fileId, body.email, body.name, body.type, body.size, body.folder, r2Key).run();
             
+            // 3. AI PIPELINE: PDF Parsing & Vectorization (For RAG)
+            if (body.type === 'application/pdf' && body.folder === 'insurance') {
+                try {
+                   // A. Parse PDF
+                   const pdfBuffer = Buffer.from(body.data, 'base64');
+                   const pdfData = await pdf(pdfBuffer);
+                   const rawText = pdfData.text;
+
+                   // B. Chunk Text
+                   const chunks = chunkText(rawText);
+
+                   // C. Generate Embeddings & Upsert to Vectorize
+                   const vectors = [];
+                   // Process in small batches if needed, doing serial for simplicity here
+                   for(let i=0; i<chunks.length; i++) {
+                       const chunk = chunks[i];
+                       if (!chunk.trim()) continue;
+
+                       // Generate Embedding using Workers AI
+                       const { data } = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [chunk] });
+                       const embedding = data[0];
+
+                       vectors.push({
+                           id: `${fileId}_${i}`,
+                           values: embedding,
+                           metadata: {
+                               text: chunk,
+                               email: body.email,
+                               fileId: fileId,
+                               fileName: body.name
+                           }
+                       });
+                   }
+                   
+                   // Upsert to Vector Index
+                   if (vectors.length > 0) {
+                       await env.VECTORIZE.upsert(vectors);
+                   }
+
+                } catch (aiError) {
+                    console.error("AI Processing Failed:", aiError);
+                    // We allow the upload to succeed even if AI indexing fails, but log it.
+                }
+            }
+
             const newFile = {
                 id: fileId,
                 name: body.name,
@@ -148,20 +204,18 @@ export default {
         }
     }
 
-    // === API: CHAT (RAG via R2) ===
+    // === API: CHAT (RAG via R2 & Vectorize) ===
     if (url.pathname === "/api/chat" && request.method === "POST") {
       try {
         const apiKey = env.API_KEY || env.GEMINI_API_KEY; 
         if (!apiKey) throw new Error("API_KEY not configured in Cloudflare Secrets");
 
-        const { history, message, attachments, remoteFileIds } = await request.json();
+        const { history, message, attachments, remoteFileIds, email } = await request.json();
         const ai = new GoogleGenAI({ apiKey }); 
 
-        // 1. Fetch Remote File Content from R2
+        // 1. Fetch Explicit Remote File Content (Legacy/Manual Selection)
         let cloudAttachments = [];
         if (remoteFileIds && remoteFileIds.length > 0) {
-            // Get R2 keys from D1 for these file IDs
-            // Note: In production, verify user ownership of these IDs via auth token
             const placeholders = remoteFileIds.map(() => '?').join(',');
             const { results } = await env.DB.prepare(
                 `SELECT r2_key, type FROM Files WHERE id IN (${placeholders})`
@@ -182,15 +236,53 @@ export default {
             }
         }
 
+        // 2. RAG: Semantic Search for Context (Implicit Memory)
+        let ragContext = "";
+        if (message && email) {
+            try {
+                // A. Embed User Question
+                const { data } = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [message] });
+                const questionEmbedding = data[0];
+
+                // B. Query Vector Index (Filter by User Email for Privacy)
+                // Note: Cloudflare Vectorize filtering might differ based on beta versions, 
+                // but generally supports metadata filtering.
+                // Assuming standard filter object structure.
+                const matches = await env.VECTORIZE.query(questionEmbedding, { 
+                    topK: 4, 
+                    returnMetadata: true 
+                    // filter: { email: email } // TODO: Enable when Vectorize filtering stabilizes
+                });
+                
+                // C. Manual Filter (if query filter unstable or mixed results)
+                const userMatches = matches.matches.filter((m: any) => m.metadata && m.metadata.email === email);
+                
+                if (userMatches.length > 0) {
+                    ragContext = userMatches.map((m: any) => 
+                        `[Document: ${m.metadata.fileName}]\nExcerpt: ${m.metadata.text}`
+                    ).join("\n\n---\n\n");
+                }
+            } catch (ragError) {
+                console.warn("RAG retrieval failed", ragError);
+            }
+        }
+
+        // 3. Construct Chat History & System Prompt
         const chatHistory = history.map((msg: any) => ({
           role: msg.role,
           parts: [{ text: msg.text }],
         }));
 
+        // Inject RAG context into System Instruction if found
+        let activeSystemInstruction = SYSTEM_INSTRUCTION;
+        if (ragContext) {
+            activeSystemInstruction += `\n\n=== RELEVANT KNOWLEDGE BASE (FROM USER DOCUMENTS) ===\n${ragContext}\n\nINSTRUCTION: Use the above excerpts to answer specific questions if they are relevant.`;
+        }
+
         const chat = ai.chats.create({
           model: 'gemini-2.5-flash',
           config: { 
-              systemInstruction: SYSTEM_INSTRUCTION,
+              systemInstruction: activeSystemInstruction,
               safetySettings: ADVOCATE_AI_SAFETY_SETTINGS,
           },
           history: chatHistory
