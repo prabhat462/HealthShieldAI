@@ -3,13 +3,9 @@ import { ChatMessage } from '../types';
 export const streamChatResponse = async (
   history: ChatMessage[],
   newMessage: string,
-  attachments: { inlineData: { mimeType: string; data: string } }[]
+  attachments: { inlineData: { mimeType: string; data: string } }[],
+  remoteFileIds: string[] = [] // New parameter for Drive files
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> => {
-  
-  // Prepare payload
-  // We exclude the very last message if it was optimistically added by UI, 
-  // but here 'history' is passed from the component state.
-  // We need to separate the "history" (context) from the "current message" (prompt).
   
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -19,7 +15,8 @@ export const streamChatResponse = async (
     body: JSON.stringify({
       history: history.filter(msg => msg.text), // Send existing history
       message: newMessage,
-      attachments: attachments
+      attachments: attachments,
+      remoteFileIds: remoteFileIds // Pass IDs to worker
     }),
   });
 

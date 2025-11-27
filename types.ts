@@ -18,3 +18,18 @@ export interface FeatureItem {
   description: string;
   icon: React.ReactNode;
 }
+
+export interface User {
+  name: string;
+  email: string;
+  picture: string;
+}
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  type: string; // 'application/pdf', 'image/jpeg', etc.
+  folder: 'insurance' | 'reports';
+  uploadDate: string;
+  size: string;
+}
