@@ -1,6 +1,7 @@
 {
-  "name": "healthshieldai",
-  "compatibility_date": "2025-11-27",
+  "name": "healthshield-ai",
+  "compatibility_date": "2024-11-27",
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist"
   }

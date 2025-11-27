@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createChatSession } from '../services/geminiService';
+import { streamChatResponse } from '../services/geminiService';
 import { ChatMessage } from '../types';
-import { Chat, GenerateContentResponse, Part } from "@google/genai";
 
 interface ChatbotSectionProps {
   isModalOpen: boolean;
@@ -19,20 +18,11 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [chatSession, setChatSession] = useState<Chat | null>(null);
   
   // File Upload State
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Initialize Gemini Chat session only when modal opens to save resources
-    if (isModalOpen && !chatSession) {
-      const session = createChatSession();
-      setChatSession(session);
-    }
-  }, [isModalOpen, chatSession]);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -41,7 +31,7 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
   }, [messages, isModalOpen]);
 
   // Helper to convert file to base64
-  const fileToGenerativePart = async (file: File): Promise<Part> => {
+  const fileToGenerativePart = async (file: File): Promise<{ inlineData: { mimeType: string; data: string } }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -73,11 +63,11 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
   };
 
   const handleSendMessage = async () => {
-    if ((!inputValue.trim() && attachments.length === 0) || !chatSession || isLoading) return;
+    if ((!inputValue.trim() && attachments.length === 0) || isLoading) return;
 
     const attachmentNames = attachments.map(f => f.name);
     
-    // Optimistic UI update
+    // Optimistic UI update for user message
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -85,51 +75,53 @@ const ChatbotSection: React.FC<ChatbotSectionProps> = ({ isModalOpen, setIsModal
       attachmentNames: attachmentNames.length > 0 ? attachmentNames : undefined
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    // Update state with user message
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
+    
     setInputValue('');
-    const currentAttachments = [...attachments];
+    const currentFiles = [...attachments];
     setAttachments([]); // Clear attachments immediately after sending
     setIsLoading(true);
 
     try {
-      // Prepare parts for multimodal request
-      const parts: Part[] = [];
-      
-      // Add text part if exists
-      if (userMsg.text) {
-        parts.push({ text: userMsg.text });
-      }
-
-      // Add attachment parts
-      for (const file of currentAttachments) {
+      // Process attachments
+      const attachmentParts = [];
+      for (const file of currentFiles) {
         const part = await fileToGenerativePart(file);
-        parts.push(part);
+        attachmentParts.push(part);
       }
 
-      // Send message to Gemini
-      // Note: The SDK allows passing Part[] directly to message
-      const resultStream = await chatSession.sendMessageStream({ message: parts });
-      
+      // Add placeholder for bot response
       const botMsgId = (Date.now() + 1).toString();
-      let fullText = '';
-      
       setMessages(prev => [...prev, { id: botMsgId, role: 'model', text: '' }]);
 
-      for await (const chunk of resultStream) {
-         const chunkText = (chunk as GenerateContentResponse).text;
-         if (chunkText) {
-             fullText += chunkText;
-             setMessages(prev => 
-               prev.map(msg => msg.id === botMsgId ? { ...msg, text: fullText } : msg)
-             );
-         }
+      // Call the backend service (Stateless: we send history + current inputs)
+      // Note: We pass 'messages' (which is the history BEFORE the current user msg) 
+      // and the current user msg data separately.
+      const reader = await streamChatResponse(messages, userMsg.text, attachmentParts);
+      
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        
+        setMessages(prev => 
+            prev.map(msg => msg.id === botMsgId ? { ...msg, text: fullText } : msg)
+        );
       }
+      
     } catch (error) {
       console.error("Error sending message:", error);
       setMessages(prev => [...prev, { 
         id: Date.now().toString(), 
         role: 'model', 
-        text: 'I apologize, but I encountered an error processing your request. Please ensure your files are valid images or PDFs and try again.' 
+        text: 'I apologize, but I encountered an error communicating with the server. Please check your connection and try again.' 
       }]);
     } finally {
       setIsLoading(false);
