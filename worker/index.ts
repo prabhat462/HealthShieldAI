@@ -1,6 +1,6 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import * as pdfParse from 'pdf-parse';
 import { Buffer } from 'node:buffer';
+import { inflateSync } from 'node:zlib';
 
 // === ADVOCATE AI GUARDRAILS (SAFETY SETTINGS) ===
 const ADVOCATE_AI_SAFETY_SETTINGS = [
@@ -72,6 +72,62 @@ function chunkText(text: string, chunkSize: number = 800) {
   return chunks;
 }
 
+// Helper: Native PDF Text Extraction (Lightweight, Worker-compatible)
+function extractTextFromPDF(pdfBuffer: Buffer): string {
+    const textContent: string[] = [];
+    const binaryStr = pdfBuffer.toString('binary');
+    
+    // Regex to find stream blocks
+    const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
+    let match;
+
+    while ((match = streamRegex.exec(binaryStr)) !== null) {
+        let streamData = match[1];
+        
+        try {
+            // Attempt to inflate (decompress) the stream assuming FlateDecode
+            const streamBuffer = Buffer.from(streamData, 'binary');
+            const decompressed = inflateSync(streamBuffer);
+            const content = decompressed.toString('utf-8');
+            const extracted = extractTextFromContentStream(content);
+            if (extracted) textContent.push(extracted);
+        } catch (e) {
+            // If inflation fails, try extracting as plain text (uncompressed stream)
+            const extracted = extractTextFromContentStream(streamData);
+            if (extracted) textContent.push(extracted);
+        }
+    }
+
+    return textContent.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function extractTextFromContentStream(content: string): string {
+    // Look for text operators: (text) Tj or [(text)] TJ
+    const textRegex = /\((.*?)\)\s*Tj|\[(.*?)\]\s*TJ/g;
+    let extracted = "";
+    let match;
+    
+    while ((match = textRegex.exec(content)) !== null) {
+        if (match[1]) {
+            // (text) Tj
+            extracted += match[1];
+        } else if (match[2]) {
+            // [(text)(text)] TJ
+            const parts = match[2].match(/\((.*?)\)/g);
+            if (parts) {
+                extracted += parts.map(p => p.slice(1, -1)).join("");
+            }
+        }
+        extracted += " ";
+    }
+    
+    // Simple unescape for PDF text
+    return extracted.replace(/\\(\d{3})|\\(.)/g, (m, octal, char) => {
+        if (octal) return String.fromCharCode(parseInt(octal, 8));
+        return char || '';
+    });
+}
+
 export default {
   async fetch(request: Request, env: any) {
     // CORS Handling
@@ -126,12 +182,9 @@ export default {
             // 3. AI PIPELINE: PDF Parsing & Vectorization (For RAG)
             if (body.type === 'application/pdf' && body.folder === 'insurance') {
                 try {
-                   // A. Parse PDF
-                   // Handle default export compatibility for pdf-parse in Worker environment
-                   const parse = (pdfParse as any).default || pdfParse;
+                   // A. Parse PDF Native
                    const pdfBuffer = Buffer.from(body.data, 'base64');
-                   const pdfData = await parse(pdfBuffer);
-                   const rawText = pdfData.text;
+                   const rawText = extractTextFromPDF(pdfBuffer);
 
                    // B. Chunk Text
                    const chunks = chunkText(rawText);
@@ -247,7 +300,6 @@ export default {
                 const questionEmbedding = data[0];
 
                 // B. Query Vector Index (Filter by User Email for Privacy)
-                // Filter ensures we only retrieve this specific user's document chunks
                 const matches = await env.VECTORIZE.query(questionEmbedding, { 
                     topK: 5, 
                     returnMetadata: true,
