@@ -151,6 +151,25 @@ async function getFileContent(env: any, fileId: string): Promise<string> {
     }
 }
 
+// Helper: Fetch file content as Base64 for Image/PDF processing
+async function getFileAsBase64(env: any, fileId: string): Promise<{ data: string, mimeType: string } | null> {
+    const { results } = await env.DB.prepare(
+        `SELECT r2_key, type FROM Files WHERE id = ?`
+    ).bind(fileId).all();
+
+    if (!results || results.length === 0) return null;
+    const fileRecord = results[0] as any;
+
+    const object = await env.BUCKET.get(fileRecord.r2_key);
+    if (!object) return null;
+
+    const arrayBuffer = await object.arrayBuffer();
+    return {
+        data: arrayBufferToBase64(arrayBuffer),
+        mimeType: fileRecord.type
+    };
+}
+
 export default {
   async fetch(request: Request, env: any) {
     // CORS Handling
@@ -281,7 +300,6 @@ export default {
             ]);
 
             const ai = new GoogleGenAI({ apiKey });
-            // FIXED: Removed deprecated getGenerativeModel
 
             const prompt = `
                 You are an expert health insurance analyst. Compare the following two health insurance policies based on these texts.
@@ -307,12 +325,11 @@ export default {
                 Do not use Markdown code blocks. Just return the raw JSON string.
             `;
 
-            // FIXED: Use ai.models.generateContent
             const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: prompt
             });
-            let text = result.text || ""; // FIXED: Use .text getter
+            let text = result.text || "";
             
             // Clean markdown if present
             text = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -328,24 +345,32 @@ export default {
     if (url.pathname === "/api/assess-claim" && request.method === "POST") {
         try {
             const apiKey = env.API_KEY || env.GEMINI_API_KEY;
-            const { policyFileId, billData, billMimeType } = await request.json(); // billData is base64
+            let { policyFileId, billData, billMimeType, billFileId } = await request.json(); // billData is base64
 
             // Get Policy Text
             const policyText = await getFileContent(env, policyFileId);
             
+            // Handle Bill Data (from ID if provided via Locker)
+            if (billFileId && !billData) {
+                const billFile = await getFileAsBase64(env, billFileId);
+                if (billFile) {
+                    billData = billFile.data;
+                    billMimeType = billFile.mimeType;
+                }
+            }
+            
             const ai = new GoogleGenAI({ apiKey });
-            // FIXED: Removed deprecated getGenerativeModel
 
             const parts: any[] = [
                 { text: `
                     You are a Claims Adjudicator AI. 
-                    Analyze the provided Hospital Bill image against the provided Insurance Policy text.
+                    Analyze the provided Hospital Bill image/pdf against the provided Insurance Policy text.
                     
                     POLICY TEXT:
                     ${policyText.slice(0, 30000)}
                     
                     TASK:
-                    1. Extract total bill amount and key procedures from the image.
+                    1. Extract total bill amount and key procedures from the bill document.
                     2. Check against policy exclusions, room rent caps, and sub-limits.
                     3. Calculate a "Claim Success Probability".
                     
@@ -360,7 +385,7 @@ export default {
                 `}
             ];
 
-            // Add Bill Image
+            // Add Bill Image/PDF
             if (billData) {
                 parts.push({
                     inlineData: {
@@ -370,12 +395,11 @@ export default {
                 });
             }
 
-            // FIXED: Use ai.models.generateContent
             const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: { parts: parts }
             });
-            let text = result.text || ""; // FIXED: Use .text getter
+            let text = result.text || "";
             text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
             return new Response(text, { headers: { "Content-Type": "application/json" } });

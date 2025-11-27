@@ -9,7 +9,13 @@ interface ClaimAssessmentModalProps {
 
 const ClaimAssessmentModal: React.FC<ClaimAssessmentModalProps> = ({ isOpen, onClose, files }) => {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>('');
+  
+  // State for switching input source
+  const [billSource, setBillSource] = useState<'upload' | 'locker'>('upload');
+  
   const [uploadedBill, setUploadedBill] = useState<File | null>(null);
+  const [selectedBillId, setSelectedBillId] = useState<string>('');
+  
   const [result, setResult] = useState<ClaimAssessmentResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -18,6 +24,7 @@ const ClaimAssessmentModal: React.FC<ClaimAssessmentModalProps> = ({ isOpen, onC
   if (!isOpen) return null;
 
   const policyFiles = files.filter(f => f.folder === 'insurance');
+  const reportFiles = files.filter(f => f.folder === 'reports');
 
   const handleBillSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
@@ -26,25 +33,19 @@ const ClaimAssessmentModal: React.FC<ClaimAssessmentModalProps> = ({ isOpen, onC
   };
 
   const handleAssess = async () => {
-    if (!selectedPolicyId || !uploadedBill) return;
+    if (!selectedPolicyId) return;
+    if (billSource === 'upload' && !uploadedBill) return;
+    if (billSource === 'locker' && !selectedBillId) return;
+
     setIsLoading(true);
     setResult(null);
 
-    // Convert Bill to Base64
-    const reader = new FileReader();
-    reader.readAsDataURL(uploadedBill);
-    reader.onload = async () => {
-        const base64Data = (reader.result as string).split(',')[1];
-        
+    const sendRequest = async (payload: any) => {
         try {
             const response = await fetch('/api/assess-claim', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    policyFileId: selectedPolicyId, 
-                    billData: base64Data,
-                    billMimeType: uploadedBill.type
-                })
+                body: JSON.stringify(payload)
             });
             
             const data = await response.json();
@@ -57,6 +58,23 @@ const ClaimAssessmentModal: React.FC<ClaimAssessmentModalProps> = ({ isOpen, onC
             setIsLoading(false);
         }
     };
+
+    const payload: any = { policyFileId: selectedPolicyId };
+
+    if (billSource === 'upload' && uploadedBill) {
+        // Convert Bill to Base64
+        const reader = new FileReader();
+        reader.readAsDataURL(uploadedBill);
+        reader.onload = async () => {
+            const base64Data = (reader.result as string).split(',')[1];
+            payload.billData = base64Data;
+            payload.billMimeType = uploadedBill.type;
+            await sendRequest(payload);
+        };
+    } else if (billSource === 'locker') {
+        payload.billFileId = selectedBillId;
+        await sendRequest(payload);
+    }
   };
 
   const getScoreColor = (score: number) => {
@@ -101,34 +119,64 @@ const ClaimAssessmentModal: React.FC<ClaimAssessmentModalProps> = ({ isOpen, onC
 
                     {/* Input: Bill */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">2. Upload Bill Image</label>
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            className="hidden" 
-                            accept="image/*"
-                            onChange={handleBillSelect}
-                        />
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full p-3 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
-                        >
-                            {uploadedBill ? (
-                                <span className="text-indigo-600 font-medium">{uploadedBill.name}</span>
-                            ) : (
-                                <>
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    Snap/Upload Bill
-                                </>
-                            )}
-                        </button>
+                         <div className="flex justify-between items-center mb-2">
+                             <label className="block text-sm font-semibold text-gray-700">2. Provide Bill</label>
+                             <div className="flex bg-gray-100 p-1 rounded-lg text-xs">
+                                 <button 
+                                    onClick={() => setBillSource('upload')}
+                                    className={`px-3 py-1 rounded-md transition-all ${billSource === 'upload' ? 'bg-white shadow text-indigo-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                                 >
+                                    Upload
+                                 </button>
+                                 <button 
+                                    onClick={() => setBillSource('locker')}
+                                    className={`px-3 py-1 rounded-md transition-all ${billSource === 'locker' ? 'bg-white shadow text-indigo-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                                 >
+                                    Locker
+                                 </button>
+                             </div>
+                        </div>
+                        
+                        {billSource === 'upload' ? (
+                            <>
+                                <input 
+                                    type="file" 
+                                    ref={fileInputRef} 
+                                    className="hidden" 
+                                    accept="image/*,application/pdf"
+                                    onChange={handleBillSelect}
+                                />
+                                <button 
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-full p-3 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {uploadedBill ? (
+                                        <span className="text-indigo-600 font-medium truncate">{uploadedBill.name}</span>
+                                    ) : (
+                                        <>
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                            Snap/Upload Bill
+                                        </>
+                                    )}
+                                </button>
+                            </>
+                        ) : (
+                            <select 
+                                className="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+                                value={selectedBillId}
+                                onChange={(e) => setSelectedBillId(e.target.value)}
+                            >
+                                <option value="">Choose Report from Locker...</option>
+                                {reportFiles.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                            </select>
+                        )}
                     </div>
                 </div>
 
                 <div className="flex justify-center mb-8">
                     <button 
                         onClick={handleAssess}
-                        disabled={isLoading || !selectedPolicyId || !uploadedBill}
+                        disabled={isLoading || !selectedPolicyId || (billSource === 'upload' && !uploadedBill) || (billSource === 'locker' && !selectedBillId)}
                         className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50 text-white font-bold py-3 px-10 rounded-full shadow-lg transform transition hover:scale-105 flex items-center gap-3"
                     >
                         {isLoading ? 'Assessing Risk...' : 'Run Risk Analysis'}
