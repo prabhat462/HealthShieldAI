@@ -2,16 +2,16 @@ import React from 'react';
 
 const RoadmapSection: React.FC = () => {
   return (
-    <section id="roadmap" class="py-16 md:py-24 bg-white">
-        <div class="container mx-auto px-6">
-            <div class="text-center max-w-3xl mx-auto">
-                <h2 class="text-3xl md:text-4xl font-bold text-gray-900">Our Path Forward</h2>
-                <p class="mt-4 text-lg text-gray-600">
+    <section id="roadmap" className="py-16 md:py-24 bg-white">
+        <div className="container mx-auto px-6">
+            <div className="text-center max-w-3xl mx-auto">
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Our Path Forward</h2>
+                <p className="mt-4 text-lg text-gray-600">
                     We're on a mission to build a complete Health Risk Intelligence Platform. Here's what's next.
                 </p>
             </div>
-            <div class="mt-16 max-w-3xl mx-auto">
-                <div class="relative pl-8 border-l-2 border-indigo-200">
+            <div className="mt-16 max-w-3xl mx-auto">
+                <div className="relative pl-8 border-l-2 border-indigo-200">
                     {[
                       {
                         phase: "Phase 1 (0-12 Months)",
@@ -34,12 +34,12 @@ const RoadmapSection: React.FC = () => {
                         desc: "Evolve into a full AI-driven RegTech analytics and Health Risk Intelligence platform for the entire industry."
                       }
                     ].map((item, idx) => (
-                      <div key={idx} class="mb-10 relative">
-                          <div class="absolute w-6 h-6 bg-indigo-600 rounded-full -left-[39px] border-4 border-white shadow-sm"></div>
-                          <div class="ml-4">
-                              <span class="bg-indigo-100 text-indigo-800 text-sm font-semibold px-3 py-1 rounded-full">{item.phase}</span>
-                              <h3 class="mt-2 text-xl font-semibold text-gray-900">{item.title}</h3>
-                              <p class="mt-1 text-gray-600">{item.desc}</p>
+                      <div key={idx} className="mb-10 relative">
+                          <div className="absolute w-6 h-6 bg-indigo-600 rounded-full -left-[39px] border-4 border-white shadow-sm"></div>
+                          <div className="ml-4">
+                              <span className="bg-indigo-100 text-indigo-800 text-sm font-semibold px-3 py-1 rounded-full">{item.phase}</span>
+                              <h3 className="mt-2 text-xl font-semibold text-gray-900">{item.title}</h3>
+                              <p className="mt-1 text-gray-600">{item.desc}</p>
                           </div>
                       </div>
                     ))}
