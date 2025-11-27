@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     // ⚠️ REPLACE THIS STRING WITH YOUR ACTUAL GEMINI API KEY ⚠️
-    'process.env.API_KEY': JSON.stringify("INSERT_YOUR_GEMINI_API_KEY_HERE"),
+    'process.env.API_KEY': JSON.stringify("AIzaSyDz8wfjQl-Jwa0fO7PJ5kKvIUgg8Dwq7_c"),
   },
   build: {
     outDir: 'dist',
