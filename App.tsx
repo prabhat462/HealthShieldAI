@@ -20,10 +20,40 @@ function App() {
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [isAssessOpen, setIsAssessOpen] = useState(false);
   
-  const [user, setUser] = useState<User | null>(null);
+  // Initialize user state from localStorage to persist session on refresh
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+        const savedSession = localStorage.getItem('healthshield_session');
+        if (savedSession) {
+            const { user, expiry } = JSON.parse(savedSession);
+            // Check if session is still valid (1 hour window)
+            if (new Date().getTime() < expiry) {
+                return user;
+            } else {
+                localStorage.removeItem('healthshield_session');
+            }
+        }
+    } catch (e) {
+        console.error("Failed to parse session", e);
+        localStorage.removeItem('healthshield_session');
+    }
+    return null;
+  });
+
   const [lockerFiles, setLockerFiles] = useState<DriveFile[]>([]);
 
-  // Initial load of files if user is present
+  // Wrapper to handle persistence when updating user state
+  const handleSetUser = (newUser: User | null) => {
+    if (newUser) {
+        const expiry = new Date().getTime() + (60 * 60 * 1000); // 1 hour from now
+        localStorage.setItem('healthshield_session', JSON.stringify({ user: newUser, expiry }));
+    } else {
+        localStorage.removeItem('healthshield_session');
+    }
+    setUser(newUser);
+  };
+
+  // Initial load of files if user is present (fetched from API to keep fresh)
   useEffect(() => {
     if (user) {
         fetch('/api/documents?email=' + user.email)
@@ -73,7 +103,7 @@ function App() {
         onOpenCompare={() => setIsCompareOpen(true)}
         onOpenAssess={() => setIsAssessOpen(true)}
         user={user}
-        setUser={setUser}
+        setUser={handleSetUser}
       />
       
       <main>
