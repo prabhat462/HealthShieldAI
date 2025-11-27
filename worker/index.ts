@@ -1,5 +1,5 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import pdf from 'pdf-parse';
+import * as pdfParse from 'pdf-parse';
 import { Buffer } from 'node:buffer';
 
 // === ADVOCATE AI GUARDRAILS (SAFETY SETTINGS) ===
@@ -127,8 +127,10 @@ export default {
             if (body.type === 'application/pdf' && body.folder === 'insurance') {
                 try {
                    // A. Parse PDF
+                   // Handle default export compatibility for pdf-parse in Worker environment
+                   const parse = (pdfParse as any).default || pdfParse;
                    const pdfBuffer = Buffer.from(body.data, 'base64');
-                   const pdfData = await pdf(pdfBuffer);
+                   const pdfData = await parse(pdfBuffer);
                    const rawText = pdfData.text;
 
                    // B. Chunk Text
@@ -245,16 +247,14 @@ export default {
                 const questionEmbedding = data[0];
 
                 // B. Query Vector Index (Filter by User Email for Privacy)
-                // Note: Cloudflare Vectorize filtering might differ based on beta versions, 
-                // but generally supports metadata filtering.
-                // Assuming standard filter object structure.
+                // Filter ensures we only retrieve this specific user's document chunks
                 const matches = await env.VECTORIZE.query(questionEmbedding, { 
-                    topK: 4, 
-                    returnMetadata: true 
-                    // filter: { email: email } // TODO: Enable when Vectorize filtering stabilizes
+                    topK: 5, 
+                    returnMetadata: true,
+                    filter: { email: email } 
                 });
                 
-                // C. Manual Filter (if query filter unstable or mixed results)
+                // C. Fallback Filter (Double check)
                 const userMatches = matches.matches.filter((m: any) => m.metadata && m.metadata.email === email);
                 
                 if (userMatches.length > 0) {
