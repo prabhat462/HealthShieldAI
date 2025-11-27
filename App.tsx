@@ -128,6 +128,7 @@ function App() {
         isOpen={isAssessOpen}
         onClose={() => setIsAssessOpen(false)}
         files={lockerFiles}
+        user={user}
       />
     </div>
   );

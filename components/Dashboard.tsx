@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, DriveFile } from '../types';
 
 interface DashboardProps {
@@ -23,6 +23,18 @@ const Dashboard: React.FC<DashboardProps> = ({
     
   const insuranceFiles = files.filter(f => f.folder === 'insurance');
   const recentFiles = [...files].sort((a,b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).slice(0, 3);
+  const [claimsAnalyzed, setClaimsAnalyzed] = useState(0);
+
+  useEffect(() => {
+    if (user?.email) {
+        fetch('/api/user/stats?email=' + user.email)
+            .then(res => res.json())
+            .then(data => {
+                if(data.claimsAnalyzed !== undefined) setClaimsAnalyzed(data.claimsAnalyzed);
+            })
+            .catch(err => console.log("Failed to load stats", err));
+    }
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-28 pb-12">
@@ -45,7 +57,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
         </div>
 
-        {/* Quick Stats Row (Optional placeholder for future expansion) */}
+        {/* Quick Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
@@ -62,7 +74,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 <div>
                     <p className="text-sm text-gray-500 font-medium">Claims Analyzed</p>
-                    <p className="text-2xl font-bold text-gray-900">0</p>
+                    <p className="text-2xl font-bold text-gray-900">{claimsAnalyzed}</p>
                 </div>
             </div>
              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">

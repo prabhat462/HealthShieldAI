@@ -202,6 +202,24 @@ export default {
         }
     }
 
+    // === API: USER STATS ===
+    if (url.pathname === "/api/user/stats" && request.method === "GET") {
+        const email = url.searchParams.get("email");
+        if (!email) return new Response("Missing email", { status: 400 });
+
+        try {
+            const result = await env.DB.prepare(
+                "SELECT COUNT(*) as count FROM Assessments WHERE user_email = ?"
+            ).bind(email).first();
+
+            return new Response(JSON.stringify({ claimsAnalyzed: result.count || 0 }), {
+                headers: { "Content-Type": "application/json" }
+            });
+        } catch (e: any) {
+             return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        }
+    }
+
     // === API: UPLOAD FILE (To R2 & D1 & Vectorize) ===
     if (url.pathname === "/api/upload" && request.method === "POST") {
         try {
@@ -345,18 +363,24 @@ export default {
     if (url.pathname === "/api/assess-claim" && request.method === "POST") {
         try {
             const apiKey = env.API_KEY || env.GEMINI_API_KEY;
-            let { policyFileId, billData, billMimeType, billFileId } = await request.json(); // billData is base64
+            // NOTE: Removed billData input as we now only support locker files
+            let { policyFileId, billFileId, email } = await request.json(); 
 
             // Get Policy Text
             const policyText = await getFileContent(env, policyFileId);
             
-            // Handle Bill Data (from ID if provided via Locker)
-            if (billFileId && !billData) {
+            // Handle Bill Data (Fetch from R2)
+            let billData = null;
+            let billMimeType = null;
+            
+            if (billFileId) {
                 const billFile = await getFileAsBase64(env, billFileId);
                 if (billFile) {
                     billData = billFile.data;
                     billMimeType = billFile.mimeType;
                 }
+            } else {
+                throw new Error("Bill file not found in locker.");
             }
             
             const ai = new GoogleGenAI({ apiKey });
@@ -401,10 +425,22 @@ export default {
             });
             let text = result.text || "";
             text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            // Parse for database logging
+            const resultJson = JSON.parse(text);
+
+            // LOG ASSESSMENT TO DATABASE
+            if (email) {
+                const assessmentId = crypto.randomUUID();
+                await env.DB.prepare(
+                    `INSERT INTO Assessments (id, user_email, policy_id, bill_id, score, probability) VALUES (?, ?, ?, ?, ?, ?)`
+                ).bind(assessmentId, email, policyFileId, billFileId, resultJson.score, resultJson.probability).run();
+            }
 
             return new Response(text, { headers: { "Content-Type": "application/json" } });
 
         } catch (e: any) {
+            console.error("Assessment Error", e);
             return new Response(JSON.stringify({ error: e.message }), { status: 500 });
         }
     }
