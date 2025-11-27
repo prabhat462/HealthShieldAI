@@ -33,3 +33,20 @@ export interface DriveFile {
   uploadDate: string;
   size: string;
 }
+
+export interface ComparisonResult {
+  features: {
+    feature: string;
+    policy1: string;
+    policy2: string;
+    winner: 'policy1' | 'policy2' | 'tie';
+  }[];
+  summary: string;
+}
+
+export interface ClaimAssessmentResult {
+  probability: 'High' | 'Medium' | 'Low';
+  score: number;
+  reasoning: string;
+  flaggedItems: string[];
+}

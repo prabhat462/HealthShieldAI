@@ -10,12 +10,16 @@ import ContactSection from './components/ContactSection';
 import Footer from './components/Footer';
 import PolicyAssistantModal from './components/PolicyAssistantModal';
 import HealthLocker from './components/HealthLocker';
+import PolicyComparisonModal from './components/PolicyComparisonModal';
+import ClaimAssessmentModal from './components/ClaimAssessmentModal';
 import { User, DriveFile } from './types';
 
 function App() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [isLockerOpen, setIsLockerOpen] = useState(false);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [isAssessOpen, setIsAssessOpen] = useState(false);
   
   const [user, setUser] = useState<User | null>(null);
   const [lockerFiles, setLockerFiles] = useState<DriveFile[]>([]);
@@ -65,6 +69,8 @@ function App() {
         onOpenChat={() => setIsChatModalOpen(true)} 
         onOpenPolicy={() => setIsPolicyModalOpen(true)}
         onOpenLocker={() => setIsLockerOpen(true)}
+        onOpenCompare={() => setIsCompareOpen(true)}
+        onOpenAssess={() => setIsAssessOpen(true)}
         user={user}
         setUser={setUser}
       />
@@ -95,6 +101,16 @@ function App() {
         user={user}
         files={lockerFiles}
         onUpload={handleUpload}
+      />
+      <PolicyComparisonModal 
+        isOpen={isCompareOpen}
+        onClose={() => setIsCompareOpen(false)}
+        files={lockerFiles}
+      />
+      <ClaimAssessmentModal
+        isOpen={isAssessOpen}
+        onClose={() => setIsAssessOpen(false)}
+        files={lockerFiles}
       />
     </div>
   );

@@ -11,11 +11,13 @@ interface HeaderProps {
   onOpenChat: () => void;
   onOpenPolicy: () => void;
   onOpenLocker: () => void;
+  onOpenCompare: () => void;
+  onOpenAssess: () => void;
   user: User | null;
   setUser: (user: User | null) => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker, user, setUser }) => {
+const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker, onOpenCompare, onOpenAssess, user, setUser }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleCredentialResponse = async (response: any) => {
@@ -86,12 +88,24 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
             <a href="#" className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
                 <span>🩺</span> HealthShield AI
             </a>
-            <div className="hidden md:flex items-center space-x-6">
+            <div className="hidden lg:flex items-center space-x-6">
                 <button 
                   onClick={handlePolicyClick} 
                   className="text-gray-600 hover:text-indigo-600 transition-colors focus:outline-none flex items-center gap-1"
                 >
                   Policy AI
+                </button>
+                <button 
+                  onClick={onOpenCompare} 
+                  className="text-gray-600 hover:text-indigo-600 transition-colors focus:outline-none flex items-center gap-1"
+                >
+                  Compare
+                </button>
+                <button 
+                  onClick={onOpenAssess} 
+                  className="text-gray-600 hover:text-indigo-600 transition-colors focus:outline-none flex items-center gap-1"
+                >
+                  Claim Assessor
                 </button>
                 <button 
                   onClick={handleChatClick} 
@@ -107,8 +121,6 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
                         Health Locker
                     </button>
                 )}
-                <a href="#features" className="text-gray-600 hover:text-indigo-600 transition-colors">Features</a>
-                <a href="#roadmap" className="text-gray-600 hover:text-indigo-600 transition-colors">Roadmap</a>
             </div>
             <div className="flex items-center space-x-4">
                  {user ? (
@@ -126,7 +138,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
                 {/* Mobile Menu Button */}
                 <button 
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="md:hidden text-gray-700 p-2 rounded-lg hover:bg-gray-100"
+                  className="lg:hidden text-gray-700 p-2 rounded-lg hover:bg-gray-100"
                 >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {isMenuOpen ? (
@@ -140,12 +152,24 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
         </nav>
         {/* Mobile Menu */}
         {isMenuOpen && (
-            <div className="md:hidden bg-white shadow-lg border-t border-gray-100">
+            <div className="lg:hidden bg-white shadow-lg border-t border-gray-100">
                 <button 
                   onClick={handlePolicyClick} 
                   className="block w-full text-left text-gray-700 py-3 px-6 hover:bg-indigo-50"
                 >
                   Policy AI
+                </button>
+                <button 
+                  onClick={() => { onOpenCompare(); setIsMenuOpen(false); }}
+                  className="block w-full text-left text-gray-700 py-3 px-6 hover:bg-indigo-50"
+                >
+                  Compare Plans
+                </button>
+                 <button 
+                  onClick={() => { onOpenAssess(); setIsMenuOpen(false); }}
+                  className="block w-full text-left text-gray-700 py-3 px-6 hover:bg-indigo-50"
+                >
+                  Claim Assessor
                 </button>
                 <button 
                   onClick={handleChatClick} 
@@ -161,8 +185,6 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
                         Health Locker
                     </button>
                 )}
-                <a href="#features" onClick={() => setIsMenuOpen(false)} className="block text-gray-700 py-3 px-6 hover:bg-indigo-50">Features</a>
-                <a href="#roadmap" onClick={() => setIsMenuOpen(false)} className="block text-gray-700 py-3 px-6 hover:bg-indigo-50">Roadmap</a>
             </div>
         )}
     </header>
