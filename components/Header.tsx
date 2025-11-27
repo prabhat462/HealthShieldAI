@@ -18,8 +18,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker, user, setUser }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const handleCredentialResponse = (response: any) => {
-    // Decode JWT (Simple implementation without external lib for demo)
+  const handleCredentialResponse = async (response: any) => {
     try {
         const base64Url = response.credential.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -28,11 +27,20 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
         }).join(''));
         
         const payload = JSON.parse(jsonPayload);
-        setUser({
+        const newUser = {
             name: payload.name,
             email: payload.email,
             picture: payload.picture
+        };
+
+        // Sync user to Backend (D1 Database)
+        await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newUser)
         });
+
+        setUser(newUser);
     } catch (e) {
         console.error("Login failed", e);
     }
@@ -40,6 +48,8 @@ const Header: React.FC<HeaderProps> = ({ onOpenChat, onOpenPolicy, onOpenLocker,
 
   // Initialize Google Login
   useEffect(() => {
+    // Check for existing session in localStorage handled by parent, 
+    // but here we ensure the button renders if not logged in.
     if (window.google && !user) {
       window.google.accounts.id.initialize({
         client_id: "487635557174-5thopn5skq9jlhb6hb7i5e5psqcgdd9m.apps.googleusercontent.com",

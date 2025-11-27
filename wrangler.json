@@ -4,5 +4,18 @@
   "main": "worker/index.ts",
   "assets": {
     "directory": "./dist"
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "healthshield-files"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "healthshield-db",
+      "database_id": "99b48fff-cdbc-4fcb-bf88-4ba5a9a4c88c"
+    }
+  ]
 }

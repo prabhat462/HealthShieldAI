@@ -1,11 +1,6 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
-// === Simulated Database (In-Memory for Demo Stability) ===
-// In a real production app, this would be Cloudflare R2, D1, or real Google Drive calls.
-const FILE_STORAGE = new Map(); 
-
 // === ADVOCATE AI GUARDRAILS (SAFETY SETTINGS) ===
-// Separate configuration for easy manual tuning.
 const ADVOCATE_AI_SAFETY_SETTINGS = [
     {
         category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
@@ -25,7 +20,7 @@ const ADVOCATE_AI_SAFETY_SETTINGS = [
     }
 ];
 
-// === SYSTEM INSTRUCTIONS & BEHAVIORAL GUARDRAILS ===
+// === SYSTEM INSTRUCTIONS ===
 const SYSTEM_INSTRUCTION = `
 You are ClaimAdvocate AI, a specialized assistant for the HealthShield AI platform. 
 
@@ -44,9 +39,31 @@ CAPABILITIES:
 3. **Appeals Guidance**: Suggest specific documents needed for an appeal based on the rejection reason.
 `;
 
+// Helper: Convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Helper: Convert Base64 string to Uint8Array for R2 storage
+function base64ToUint8Array(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
 export default {
   async fetch(request: Request, env: any) {
-    // CORS
+    // CORS Handling
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -59,71 +76,109 @@ export default {
 
     const url = new URL(request.url);
 
-    // === API: UPLOAD FILE (Mock Drive) ===
-    if (url.pathname === "/api/upload" && request.method === "POST") {
-        const body = await request.json();
-        const fileId = "drive-" + Date.now();
-        
-        const newFile = {
-            id: fileId,
-            name: body.name,
-            type: body.type,
-            size: body.size,
-            folder: body.folder,
-            uploadDate: new Date().toISOString(),
-            data: body.data // Storing Base64 in memory for the demo
-        };
-
-        // Store in "DB"
-        let userFiles = FILE_STORAGE.get(body.email) || [];
-        userFiles.push(newFile);
-        FILE_STORAGE.set(body.email, userFiles);
-
-        return new Response(JSON.stringify(newFile), {
-            headers: { "Content-Type": "application/json" }
-        });
+    // === API: AUTH/LOGIN (Sync User to D1) ===
+    if (url.pathname === "/api/auth/login" && request.method === "POST") {
+        try {
+            const user = await request.json();
+            // Insert user if not exists (Upsert logic)
+            await env.DB.prepare(
+                `INSERT INTO Users (email, name, picture) VALUES (?, ?, ?) 
+                 ON CONFLICT(email) DO UPDATE SET name=excluded.name, picture=excluded.picture`
+            ).bind(user.email, user.name, user.picture).run();
+            
+            return new Response(JSON.stringify({ success: true }), { 
+                headers: { "Content-Type": "application/json" } 
+            });
+        } catch (e: any) {
+            return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        }
     }
 
-    // === API: LIST FILES ===
+    // === API: UPLOAD FILE (To R2 & D1) ===
+    if (url.pathname === "/api/upload" && request.method === "POST") {
+        try {
+            const body = await request.json();
+            const fileId = crypto.randomUUID();
+            const r2Key = `${body.email}/${fileId}-${body.name}`;
+            
+            // 1. Store Binary in R2
+            const fileData = base64ToUint8Array(body.data);
+            await env.BUCKET.put(r2Key, fileData, {
+                httpMetadata: { contentType: body.type }
+            });
+
+            // 2. Store Metadata in D1
+            await env.DB.prepare(
+                `INSERT INTO Files (id, email, name, type, size, folder, r2_key) VALUES (?, ?, ?, ?, ?, ?, ?)`
+            ).bind(fileId, body.email, body.name, body.type, body.size, body.folder, r2Key).run();
+            
+            const newFile = {
+                id: fileId,
+                name: body.name,
+                type: body.type,
+                size: body.size,
+                folder: body.folder,
+                uploadDate: new Date().toISOString()
+            };
+
+            return new Response(JSON.stringify(newFile), {
+                headers: { "Content-Type": "application/json" }
+            });
+        } catch (e: any) {
+            console.error("Upload Error", e);
+            return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        }
+    }
+
+    // === API: LIST FILES (From D1) ===
     if (url.pathname === "/api/documents" && request.method === "GET") {
         const email = url.searchParams.get("email");
-        const files = FILE_STORAGE.get(email) || [];
-        // Return metadata only (exclude heavy data)
-        const meta = files.map(({data, ...rest}) => rest);
-        return new Response(JSON.stringify({ files: meta }), {
-            headers: { "Content-Type": "application/json" }
-        });
+        if (!email) return new Response("Missing email", { status: 400 });
+
+        try {
+            const { results } = await env.DB.prepare(
+                "SELECT id, name, type, size, folder, upload_date as uploadDate FROM Files WHERE email = ? ORDER BY upload_date DESC"
+            ).bind(email).all();
+
+            return new Response(JSON.stringify({ files: results }), {
+                headers: { "Content-Type": "application/json" }
+            });
+        } catch (e: any) {
+             return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+        }
     }
 
-    // === API: CHAT ===
+    // === API: CHAT (RAG via R2) ===
     if (url.pathname === "/api/chat" && request.method === "POST") {
       try {
-        const apiKey = env.API_KEY || "YOUR_FALLBACK_KEY"; 
-        
-        // Safety Check
-        if (!apiKey || apiKey === "YOUR_FALLBACK_KEY") {
-             // Try to use a hardcoded fallback if env is missing (for demo stability)
-             const hardcoded = "AIza..."; // DO NOT COMMIT REAL KEYS
-        }
+        const apiKey = env.API_KEY || env.GEMINI_API_KEY; 
+        if (!apiKey) throw new Error("API_KEY not configured in Cloudflare Secrets");
 
         const { history, message, attachments, remoteFileIds } = await request.json();
+        const ai = new GoogleGenAI({ apiKey }); 
 
-        const ai = new GoogleGenAI({ apiKey: env.API_KEY || env.GEMINI_API_KEY }); 
-
-        // 1. Fetch Remote File Content (from "Drive")
+        // 1. Fetch Remote File Content from R2
         let cloudAttachments = [];
         if (remoteFileIds && remoteFileIds.length > 0) {
-            // Flatten all user storage to find files (Simple search)
-            for (const userStore of FILE_STORAGE.values()) {
-                const found = userStore.filter((f: any) => remoteFileIds.includes(f.id));
-                found.forEach((f: any) => {
+            // Get R2 keys from D1 for these file IDs
+            // Note: In production, verify user ownership of these IDs via auth token
+            const placeholders = remoteFileIds.map(() => '?').join(',');
+            const { results } = await env.DB.prepare(
+                `SELECT r2_key, type FROM Files WHERE id IN (${placeholders})`
+            ).bind(...remoteFileIds).all();
+
+            for (const fileRecord of results as any[]) {
+                const object = await env.BUCKET.get(fileRecord.r2_key);
+                if (object) {
+                    const arrayBuffer = await object.arrayBuffer();
+                    const base64Data = arrayBufferToBase64(arrayBuffer);
                     cloudAttachments.push({
                         inlineData: {
-                            mimeType: f.type,
-                            data: f.data
+                            mimeType: fileRecord.type,
+                            data: base64Data
                         }
                     });
-                });
+                }
             }
         }
 
@@ -132,33 +187,16 @@ export default {
           parts: [{ text: msg.text }],
         }));
 
-        // === CONTEXT CACHING STRATEGY (Prepared Structure) ===
-        // In a production scenario with heavy documents (e.g. > 32k tokens),
-        // we would initialize the cache here.
-        /*
-        let cachedContentName = undefined;
-        if (cloudAttachments.length > 0) {
-             // hypothetical check if we should cache
-             const cacheOp = await ai.cache.create({
-                 model: 'gemini-1.5-flash-001',
-                 contents: cloudAttachments, 
-                 ttl: '300s'
-             });
-             cachedContentName = cacheOp.name;
-        }
-        */
-
         const chat = ai.chats.create({
           model: 'gemini-2.5-flash',
           config: { 
               systemInstruction: SYSTEM_INSTRUCTION,
-              safetySettings: ADVOCATE_AI_SAFETY_SETTINGS, // Applied Guardrails
-              // cachedContent: cachedContentName // Apply cache if created
+              safetySettings: ADVOCATE_AI_SAFETY_SETTINGS,
           },
           history: chatHistory
         });
 
-        let currentMessageParts = [];
+        let currentMessageParts: any[] = [];
         if (message) currentMessageParts.push({ text: message });
         
         // Add Local Attachments
