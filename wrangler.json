@@ -1,5 +1,5 @@
 {
-  "name": "healthshield-ai",
+  "name": "healthshieldai",
   "compatibility_date": "2024-11-27",
   "main": "worker/index.ts",
   "assets": {
