@@ -120,7 +120,7 @@ const Header: React.FC<HeaderProps> = ({
                                     <p className="text-sm font-bold text-gray-900 truncate">{user.email}</p>
                                 </div>
                                 <button onClick={() => { onOpenLocker(); setIsProfileMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">My Locker</button>
-                                <button onClick={() => { onOpenPolicy(); setIsProfileMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Policy AI</button>
+                                <button onClick={() => { onOpenPolicy(); setIsProfileMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Policy Q&A Bot</button>
                                 <div className="border-t border-gray-50 my-1"></div>
                                 <button onClick={handleLogout} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Sign Out</button>
                             </div>
@@ -165,6 +165,12 @@ const Header: React.FC<HeaderProps> = ({
                   className="block w-full text-left text-gray-700 py-4 px-6 hover:bg-indigo-50 border-b border-gray-50"
                 >
                   Advocate AI
+                </button>
+                 <button 
+                  onClick={() => { onOpenPolicy(); setIsMenuOpen(false); }}
+                  className="block w-full text-left text-gray-700 py-4 px-6 hover:bg-indigo-50 border-b border-gray-50"
+                >
+                  Policy Q&A
                 </button>
                 <button 
                   onClick={() => { onOpenCompare(); setIsMenuOpen(false); }}

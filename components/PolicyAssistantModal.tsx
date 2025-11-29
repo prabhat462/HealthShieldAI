@@ -24,7 +24,7 @@ const PolicyAssistantModal: React.FC<PolicyAssistantModalProps> = ({ isOpen, onC
 
   const handleLaunchZapier = () => {
     // Open Zapier in a new tab since it blocks iframes
-    window.open('https://claim-approval-predictor.zapier.app/', '_blank', 'noopener,noreferrer');
+    window.open('https://new-interface-318c0f.zapier.app/page', '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -35,17 +35,17 @@ const PolicyAssistantModal: React.FC<PolicyAssistantModalProps> = ({ isOpen, onC
             <div className="w-full md:w-80 bg-gray-50 border-r border-gray-200 p-6 flex flex-col h-auto md:h-full shrink-0">
                 <div className="mb-6">
                     <h3 className="font-bold text-gray-900 text-xl flex items-center gap-2">
-                        <span>🛡️</span> Policy AI
+                        <span>🤖</span> Policy Q&A Bot
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">
-                        AI-Guided Policy Selection & Approval Predictor
+                        Self-service digital assistant for your insurance policies.
                     </p>
                 </div>
 
                 <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm mb-6">
                     <h4 className="text-sm font-semibold text-gray-800 mb-2">Context Documents</h4>
                     <p className="text-xs text-gray-500 mb-4">
-                        Select your health reports or existing policy here to prepare for the session.
+                        Upload your health insurance policy PDF here to prepare for the session.
                     </p>
 
                     {/* Attachment List */}
@@ -68,7 +68,7 @@ const PolicyAssistantModal: React.FC<PolicyAssistantModalProps> = ({ isOpen, onC
                         ref={fileInputRef}
                         onChange={handleFileSelect}
                         className="hidden" 
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        accept=".pdf"
                         multiple
                     />
                     <button 
@@ -76,12 +76,12 @@ const PolicyAssistantModal: React.FC<PolicyAssistantModalProps> = ({ isOpen, onC
                         className="w-full py-2.5 px-4 bg-white border border-dashed border-indigo-300 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-50 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                        Attach Documents
+                        Attach Policy PDF
                     </button>
                     {attachments.length > 0 && (
                         <div className="mt-2 text-[10px] text-green-600 flex items-center justify-center gap-1 bg-green-50 py-1 rounded text-center leading-tight">
                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                            <div>Files ready. Please re-upload in the chat window.</div>
+                            <div>Files ready. Please upload to the bot interface.</div>
                         </div>
                     )}
                 </div>
@@ -89,7 +89,7 @@ const PolicyAssistantModal: React.FC<PolicyAssistantModalProps> = ({ isOpen, onC
                 <div className="hidden md:block mt-auto">
                    <div className="bg-blue-50 p-4 rounded-xl">
                         <p className="text-xs text-blue-800 leading-relaxed">
-                            <strong>Note:</strong> Due to security protocols, your files cannot be automatically transferred. Please drag and drop them into the chat window once it opens.
+                            <strong>Note:</strong> This tool uses Zapier AI. You will be redirected to a secure interface to upload your PDF and ask questions.
                         </p>
                    </div>
                 </div>
@@ -118,25 +118,24 @@ const PolicyAssistantModal: React.FC<PolicyAssistantModalProps> = ({ isOpen, onC
                 {/* Launch Content */}
                 <div className="flex-grow flex flex-col items-center justify-center p-8 text-center bg-gray-50/30">
                     <div className="bg-orange-100 p-6 rounded-full mb-6 animate-pulse">
-                        <svg className="w-16 h-16 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <svg className="w-16 h-16 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
                     
-                    <h2 className="text-3xl font-bold text-gray-900 mb-4">Connect to Policy AI</h2>
+                    <h2 className="text-3xl font-bold text-gray-900 mb-4">Launch Policy Q&A Bot</h2>
                     <p className="text-gray-600 max-w-md mb-8">
-                        The AI Policy Assistant is hosted on a secure external server. 
-                        Click below to launch the session in a new window.
+                        Upload your policy PDF and ask natural-language questions about coverage, limits, and terms. Our AI extracts and summarizes key details instantly.
                     </p>
 
                     <button 
                         onClick={handleLaunchZapier}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-semibold py-4 px-10 rounded-full shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all flex items-center gap-3"
+                        className="bg-orange-600 hover:bg-orange-700 text-white text-lg font-semibold py-4 px-10 rounded-full shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all flex items-center gap-3"
                     >
-                        <span>Launch Assistant</span>
+                        <span>Open Assistant</span>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                     </button>
 
                     <p className="mt-8 text-sm text-gray-400">
-                        Powered by Zapier Interfaces
+                        Powered by Zapier Interfaces & OpenAI
                     </p>
                 </div>
             </div>
